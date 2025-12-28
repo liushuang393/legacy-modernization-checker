@@ -1,0 +1,305 @@
+# =============================================================================
+# OWASP Top 10:2025 - TypeScript/JavaScript カスタムルール
+# =============================================================================
+# 【カスタマイズ可能】各ルールの severity / message / pattern は案件に応じて調整可
+# 【追加推奨】プロジェクト固有のパターン（社内フレームワーク等）
+# =============================================================================
+
+rules:
+  # ===========================================================================
+  # A01:2025 - Broken Access Control（アクセス制御の不備）
+  # ===========================================================================
+
+  # 【カスタマイズ可能】オープンリダイレクト検出
+  - id: ts-open-redirect
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: |
+      オープンリダイレクトの疑い。ユーザー入力をリダイレクト先に使用しています。
+      対策: ホワイトリスト検証を実装してください。
+    pattern-either:
+      - pattern: res.redirect($USER_INPUT)
+      - pattern: window.location = $USER_INPUT
+      - pattern: window.location.href = $USER_INPUT
+      - pattern: location.assign($USER_INPUT)
+    metadata:
+      owasp: "A01:2025 Broken Access Control"
+      cwe: "CWE-601"
+      autofix: false
+
+  # ===========================================================================
+  # A02:2025 - Cryptographic Failures（暗号化の失敗）
+  # ===========================================================================
+
+  # 【カスタマイズ可能】弱い暗号アルゴリズム検出
+  - id: ts-weak-crypto
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: |
+      弱い暗号アルゴリズム（MD5/SHA1）を使用しています。
+      対策: SHA-256以上、またはbcrypt/argon2を使用してください。
+    pattern-either:
+      - pattern: crypto.createHash("md5")
+      - pattern: crypto.createHash("sha1")
+      - pattern: CryptoJS.MD5(...)
+      - pattern: CryptoJS.SHA1(...)
+    metadata:
+      owasp: "A02:2025 Cryptographic Failures"
+      cwe: "CWE-328"
+      autofix: false
+
+  # 【カスタマイズ可能】不安全な乱数生成
+  - id: ts-insecure-random
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: |
+      Math.random()はセキュリティ用途に不適切です。
+      対策: crypto.randomBytes() または crypto.getRandomValues() を使用。
+    pattern: Math.random()
+    metadata:
+      owasp: "A02:2025 Cryptographic Failures"
+      cwe: "CWE-330"
+      autofix: false
+
+  # ===========================================================================
+  # A03:2025 - Injection（インジェクション）
+  # ===========================================================================
+
+  # 【重要】eval() 使用禁止
+  - id: ts-no-eval
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: |
+      eval() はコードインジェクションのリスクがあります。使用禁止。
+      対策: JSON.parse()、安全なパーサー、または設計見直し。
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+      - pattern: setTimeout($STR, ...)
+      - pattern: setInterval($STR, ...)
+    metadata:
+      owasp: "A03:2025 Injection"
+      cwe: "CWE-95"
+      autofix: false
+
+  # 【重要】innerHTML による XSS
+  - id: ts-innerhtml-xss
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: |
+      innerHTML/outerHTML はXSSリスクがあります。
+      対策: textContent、またはDOMPurify等でサニタイズ。
+    pattern-either:
+      - pattern: $EL.innerHTML = $DATA
+      - pattern: $EL.outerHTML = $DATA
+      - pattern: document.write(...)
+      - pattern: document.writeln(...)
+    metadata:
+      owasp: "A03:2025 Injection"
+      cwe: "CWE-79"
+      autofix: false
+
+  # 【重要】React dangerouslySetInnerHTML
+  - id: ts-react-dangerous-html
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: |
+      dangerouslySetInnerHTML はXSSリスクがあります。
+      対策: DOMPurify等でサニタイズ、または別のアプローチを検討。
+    pattern: dangerouslySetInnerHTML={{__html: $DATA}}
+    metadata:
+      owasp: "A03:2025 Injection"
+      cwe: "CWE-79"
+      autofix: false
+
+  # 【重要】SQLインジェクション（文字列連結）
+  - id: ts-sql-injection
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: |
+      SQL文字列連結はインジェクションリスクがあります。
+      対策: パラメータ化クエリ（Prepared Statement）を使用。
+    pattern-either:
+      - pattern: $DB.query("..." + $VAR + "...")
+      - pattern: $DB.execute("..." + $VAR + "...")
+      - pattern: |
+          `SELECT ... ${$VAR} ...`
+      - pattern: |
+          `INSERT ... ${$VAR} ...`
+      - pattern: |
+          `UPDATE ... ${$VAR} ...`
+      - pattern: |
+          `DELETE ... ${$VAR} ...`
+    metadata:
+      owasp: "A03:2025 Injection"
+      cwe: "CWE-89"
+      autofix: false
+
+  # 【重要】コマンドインジェクション
+  - id: ts-command-injection
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: |
+      シェルコマンド実行にユーザー入力を使用しています。
+      対策: execFileSync等の配列形式API、または入力検証。
+    pattern-either:
+      - pattern: exec($CMD)
+      - pattern: execSync($CMD)
+      - pattern: spawn($CMD, { shell: true })
+
+  # ===========================================================================
+  # A05:2025 - Security Misconfiguration（セキュリティ設定ミス）
+  # ===========================================================================
+
+  # 【重要】ハードコードされた認証情報
+  - id: ts-hardcoded-secret
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: |
+      ハードコードされた認証情報/シークレットを検出。
+      対策: 環境変数、AWS Secrets Manager、Vault等を使用。
+    pattern-either:
+      - pattern: password = "..."
+      - pattern: apiKey = "..."
+      - pattern: api_key = "..."
+      - pattern: secret = "..."
+      - pattern: token = "..."
+      - pattern: const PASSWORD = "..."
+      - pattern: const API_KEY = "..."
+      - pattern: const SECRET = "..."
+    metadata:
+      owasp: "A05:2025 Security Misconfiguration"
+      cwe: "CWE-798"
+      autofix: false
+
+  # 【カスタマイズ可能】デバッグモード有効
+  - id: ts-debug-enabled
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: |
+      本番環境でデバッグモードが有効になっている可能性。
+      対策: 環境変数で制御し、本番では無効化。
+    pattern-either:
+      - pattern: "debug: true"
+      - pattern: "DEBUG = true"
+      - pattern: app.set("env", "development")
+    metadata:
+      owasp: "A05:2025 Security Misconfiguration"
+      cwe: "CWE-489"
+      autofix: false
+
+  # ===========================================================================
+  # A07:2025 - Identification and Authentication Failures（認証の失敗）
+  # ===========================================================================
+
+  # 【カスタマイズ可能】JWT検証なし
+  - id: ts-jwt-no-verify
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: |
+      JWTの検証なしでデコードしています。
+      対策: jwt.verify() で署名検証を実施。
+    pattern-either:
+      - pattern: jwt.decode($TOKEN)
+      - pattern: jsonwebtoken.decode($TOKEN)
+    metadata:
+      owasp: "A07:2025 Identification and Authentication Failures"
+      cwe: "CWE-347"
+      autofix: false
+
+  # ===========================================================================
+  # A08:2025 - Software and Data Integrity Failures（整合性の失敗）
+  # ===========================================================================
+
+  # 【重要】不安全なデシリアライズ
+  - id: ts-unsafe-deserialize
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: |
+      不安全なデシリアライズを検出。RCEリスクがあります。
+      対策: 信頼できるデータのみ処理、型検証を実施。
+    pattern-either:
+      - pattern: serialize.unserialize(...)
+      - pattern: node-serialize.unserialize(...)
+      - pattern: js-yaml.load($DATA)
+    metadata:
+      owasp: "A08:2025 Software and Data Integrity Failures"
+      cwe: "CWE-502"
+      autofix: false
+
+  # ===========================================================================
+  # A09:2025 - Security Logging and Monitoring Failures（ログ・監視の失敗）
+  # ===========================================================================
+
+  # 【カスタマイズ可能】機密情報のログ出力
+  - id: ts-sensitive-log
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: |
+      機密情報がログに出力される可能性。
+      対策: パスワード/トークン等はマスク処理。
+    pattern-either:
+      - pattern: console.log(..., password, ...)
+      - pattern: console.log(..., token, ...)
+      - pattern: console.log(..., secret, ...)
+      - pattern: logger.info(..., password, ...)
+      - pattern: logger.debug(..., password, ...)
+    metadata:
+      owasp: "A09:2025 Security Logging and Monitoring Failures"
+      cwe: "CWE-532"
+      autofix: false
+
+  # ===========================================================================
+  # A10:2025 - Server-Side Request Forgery (SSRF)
+  # ===========================================================================
+
+  # 【重要】SSRF検出
+  - id: ts-ssrf
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: |
+      SSRFの疑い。ユーザー入力をURL/ホストに使用。
+      対策: URLホワイトリスト、内部ネットワークへのアクセス禁止。
+    pattern-either:
+      - pattern: fetch($USER_URL)
+      - pattern: axios.get($USER_URL)
+      - pattern: axios.post($USER_URL, ...)
+      - pattern: http.get($USER_URL, ...)
+      - pattern: request($USER_URL)
+    metadata:
+      owasp: "A10:2025 Server-Side Request Forgery"
+      cwe: "CWE-918"
+      autofix: false
+
+  # ===========================================================================
+  # 追加推奨ルール（OWASP以外の重要セキュリティ）
+  # ===========================================================================
+
+  # 【重要】プロトタイプ汚染
+  - id: ts-prototype-pollution
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: |
+      プロトタイプ汚染の疑い。
+      対策: Object.freeze()、Map使用、__proto__フィルタ。
+    pattern-either:
+      - pattern: $OBJ[...] = ...
+      - pattern: Object.assign($TARGET, $USER_INPUT)
+      - pattern: "{ ...$USER_INPUT }"
+    metadata:
+      owasp: "A03:2025 Injection"
+      cwe: "CWE-1321"
+      autofix: false
+
+  # 【カスタマイズ可能】ReDoS（正規表現DoS）
+  - id: ts-redos
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: |
+      ReDoS脆弱性の疑い。複雑な正規表現パターン。
+      対策: 正規表現の見直し、タイムアウト設定。
+    pattern-regex: 'new RegExp\([^)]*(\+|\*|\{[0-9]+,\})[^)]*(\+|\*|\{[0-9]+,\})'
+    metadata:
+      owasp: "A03:2025 Injection"
+      cwe: "CWE-1333"
+      autofix: false

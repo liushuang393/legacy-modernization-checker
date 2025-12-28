@@ -24,7 +24,7 @@ public class SecurityBaselineConfig {
   @Bean
   SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
     http
-        .csrf(csrf -> csrf.withDefaults())
+        .csrf(Customizer.withDefaults())
         .authorizeHttpRequests(auth -> auth
             // Health check: 公開する場合も、IP 制限などの追加対策を推奨
             .requestMatchers("/actuator/health").permitAll()
@@ -33,8 +33,7 @@ public class SecurityBaselineConfig {
             // API は認証必須（役割は案件に合わせて細分化）
             .requestMatchers("/api/**").authenticated()
             // 既定拒否
-            .anyRequest().denyAll()
-        )
+            .anyRequest().denyAll())
         .httpBasic(Customizer.withDefaults());
 
     return http.build();

@@ -44,6 +44,32 @@ Spring Boot / Spring Batch プロジェクト向けのセキュリティ自動�
 ### 2.2 方法B：このテンプレをベースに新規作成
 - この repo をそのまま利用し、`app-*` を開発ベースにします。
 
+#### モジュール構成
+```
+legacy-modernization-starter-v2/
+├── pom.xml                  # 親POM（共通設定・依存管理）
+├── app-core/                # コアモジュール：ドメインモデル、ビジネスロジック
+├── app-security/            # セキュリティモジュール：認証・認可の共通設定
+├── app-infra/               # インフラモジュール：DB/MQ/外部連携アダプタ（空）
+├── app-web/                 # Webモジュール：REST API、Controller
+├── app-batch/               # バッチモジュール：定期実行ジョブ
+├── tools/                   # セキュリティ検証ツール設定
+│   ├── semgrep/             # Semgrep カスタムルール
+│   ├── zap/                 # ZAP Automation 設定
+│   └── remediate/           # 対策案生成スクリプト
+├── scripts/                 # ローカル実行スクリプト
+├── docs/                    # 設計ドキュメント
+└── reports/                 # 検証結果出力先（Git管理外）
+```
+
+| モジュール | 役割 |
+|-----------|------|
+| `app-core` | ドメインモデル、バリデーション、共通ユーティリティ |
+| `app-security` | Spring Security 基線設定、認証・認可の共通コンポーネント |
+| `app-infra` | Repository 実装、外部 API クライアント、MQ 連携（現在は空） |
+| `app-web` | REST Controller、Web 固有の設定 |
+| `app-batch` | Spring Batch ジョブ、スケジューラ設定 |
+
 ---
 
 ## 3. ローカル実行（すぐ結果を見る）
@@ -53,15 +79,41 @@ Spring Boot / Spring Batch プロジェクト向けのセキュリティ自動�
 - Docker（ZAP 用）
 - Python 3.12+
 - （任意）Semgrep：無ければ Docker で実行します（スクリプトは Docker 方式）
+- **⚠️ ビルドが通ること**：`mvn package` が成功する状態で実行してください（SCA/SBOM はビルド成果物を解析します）
+
+### 設定ファイル（重要）
+スクリプトは `scripts/.env` から設定を読み込みます：
+
+```bash
+# 初回セットアップ（他のプロジェクトに適用する場合）
+cp scripts/.env.sample scripts/.env
+# エディタで .env を開いて、プロジェクトに合わせて編集
+```
+
+主な設定項目：
+
+| 設定 | 説明 | 例 |
+|-----|------|-----|
+| `PROJECT_NAME` | レポートに表示するプロジェクト名 | `"My App"` |
+| `PROJECT_TYPE` | プロジェクトタイプ | `"maven"` / `"npm"` / `"maven,npm"` |
+| `BUILD_ROOT` | pom.xml/package.json の場所 | `"."` / `"backend"` |
+| `NPM_ROOTS` | npm プロジェクトのパス（複数可） | `"frontend"` / `"frontend,packages/ui"` |
+| `ENABLE_DAST` | DAST スキャンの有効化 | `"true"` / `"false"` |
+| `APP_START_CMD` | アプリ起動コマンド | `"npm run start"` |
+| `APP_PORT` | アプリのポート番号 | `"3000"` |
+
+詳細は `scripts/.env.sample` を参照してください。
 
 ### 実行
 Linux/macOS で実行する場合：
 ```bash
 chmod +x scripts/run_checks_local.sh
 ./scripts/run_checks_local.sh
+```
 
 Windows で実行する場合：
-scripts/run_checks_local.bat
+```cmd
+scripts\run_checks_local.bat
 ```
 
 ### 出力（結果）
@@ -69,8 +121,10 @@ scripts/run_checks_local.bat
 
 | ファイル | 説明 |
 |---------|------|
-| `semgrep.sarif` | SAST（Semgrep 標準ルール）|
-| `semgrep-custom.sarif` | SAST（自社カスタムルール）|
+| `semgrep.sarif` | SAST - Java（Semgrep 標準ルール）|
+| `semgrep-custom.sarif` | SAST - Java（自社カスタムルール）|
+| `semgrep-ts.sarif` | SAST - TypeScript/JS（Semgrep 標準ルール）|
+| `semgrep-ts-custom.sarif` | SAST - TypeScript/JS（OWASP Top 10:2025 カスタムルール）|
 | `dependency-check-report.json` | SCA（依存関係脆弱性）|
 | `bom.json` | SBOM（CycloneDX 形式）|
 | `zap-report.html` / `.json` | DAST（ZAP 動的スキャン）|
