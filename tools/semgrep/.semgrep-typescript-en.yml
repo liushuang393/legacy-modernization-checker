@@ -1,0 +1,86 @@
+# =============================================================================
+# OWASP Top 10:2025 - TypeScript/JavaScript Custom Rules (English)
+# =============================================================================
+
+rules:
+  # ===========================================================================
+  # A03:2025 - Injection (XSS, SQL Injection)
+  # ===========================================================================
+
+  # DOM XSS via innerHTML
+  - id: ts-dom-xss-innerhtml
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: |
+      Potential DOM XSS: innerHTML used with user input.
+      Use textContent or DOMPurify.sanitize() instead.
+    pattern-either:
+      - pattern: $EL.innerHTML = $USER_INPUT
+      - pattern: $EL.innerHTML = `...${$USER_INPUT}...`
+      - pattern: document.write($USER_INPUT)
+      - pattern: document.write(`...${$USER_INPUT}...`)
+    metadata:
+      owasp: "A03:2025 Injection"
+      cwe: "CWE-79"
+      autofix: false
+
+  # eval() usage
+  - id: ts-eval-injection
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: |
+      eval() usage detected. This can lead to code injection.
+      Use safer alternatives like JSON.parse() for data parsing.
+    pattern-either:
+      - pattern: eval($X)
+      - pattern: new Function($X)
+      - pattern: setTimeout($STRING, ...)
+      - pattern: setInterval($STRING, ...)
+    metadata:
+      owasp: "A03:2025 Injection"
+      cwe: "CWE-95"
+      autofix: false
+
+  # SQL Injection via string concatenation
+  - id: ts-sql-injection
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: |
+      SQL Injection vulnerability: string concatenation in query.
+      Use parameterized queries instead.
+    pattern-either:
+      - pattern: $DB.query("..." + $USER_INPUT + "...")
+      - pattern: $DB.query(`...${$USER_INPUT}...`)
+      - pattern: |
+          $SQL = "..." + $USER_INPUT + "..."
+          ...
+          $DB.query($SQL)
+    metadata:
+      owasp: "A03:2025 Injection"
+      cwe: "CWE-89"
+      autofix: false
+
+  # ===========================================================================
+  # A08:2025 - Software and Data Integrity Failures
+  # ===========================================================================
+
+  # Prototype Pollution
+  - id: ts-prototype-pollution
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: |
+      Potential Prototype Pollution: unsafe property assignment.
+      Validate keys to exclude __proto__, constructor, prototype.
+    pattern-either:
+      - pattern: $OBJ[$KEY] = $VALUE
+      - pattern: |
+          for (... in $SOURCE) {
+            ...
+            $TARGET[$KEY] = ...
+            ...
+          }
+    metadata:
+      owasp: "A08:2025 Software and Data Integrity Failures"
+      cwe: "CWE-1321"
+      autofix: false
+

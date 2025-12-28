@@ -103,6 +103,23 @@ cp scripts/.env.sample scripts/.env
 | `APP_PORT` | アプリのポート番号 | `"3000"` |
 
 詳細は `scripts/.env.sample` を参照してください。
+### テスト用脆弱性ファイルをコピー-下記テスト（### 実行）前に行ってください
+```bash
+# Linux/macOS
+./test-vulnerabilities/setup-test.sh
+
+# Windows
+test-vulnerabilities\setup-test.bat
+```
+
+### テスト用脆弱性ファイルを削除-下記テスト（### 実行）完了時点で実行
+```bash
+# Linux/macOS
+./test-vulnerabilities/cleanup-test.sh
+
+# Windows
+test-vulnerabilities\cleanup-test.bat
+```
 
 ### 実行
 Linux/macOS で実行する場合：
