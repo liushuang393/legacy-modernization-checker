@@ -1,16 +1,28 @@
-# Legacy Modernization Starter（持ち込みプロジェクト即時チェック用）
+# Legacy Modernization Checker
+## OWASP Top 10:2025 自動検証・対策生成ツール
+
+Spring Boot / Spring Batch プロジェクト向けのセキュリティ自動検証テンプレートです。
 
 ## 目的
-- Spring Boot + Spring Batch を対象に、OWASP Top 10:2025 を意識した
-  「自動検証（SAST/SCA/SBOM/DAST）」を即時に回せるテンプレートです。
-- 任意の Spring Boot / Spring Batch プロジェクトを持ち込み（または本テンプレートをマージ）すると：
-  - **SAST / SCA / SBOM / DAST** が即座に実行可能
-  - **security-remediation.md（対策案）** を自動生成
-  - 顧客・監査向けの証跡（artifact）として活用可能
+- **OWASP Top 10:2025** に準拠したセキュリティ検証を自動化
+- 検出された脆弱性に対する **対策案を自動生成**
+- 顧客・監査向けの **証跡（artifact）** を一括出力
+
+### 主な機能
+| 機能 | 説明 |
+|------|------|
+| **SAST** | Semgrep による静的解析（カスタムルール対応） |
+| **SCA** | Dependency-Check による依存関係脆弱性検出 |
+| **SBOM** | CycloneDX 形式の部品表生成 |
+| **DAST** | ZAP による動的スキャン |
+| **Container Scan** | Trivy によるイメージ/FS スキャン |
+| **Secret Detection** | Gitleaks による機密情報検出 |
+| **対策案自動生成** | 検出結果から `security-remediation.md` を生成 |
+| **統合レポート** | 全結果を1つの HTML ダッシュボードに集約 |
 
 ---
 
-## 1. ZIPの中身
+## 1. プロジェクトの中身
 - `.gitlab-ci.yml`：GitLab CI でフル検証
 - `scripts/run_checks_local.sh`：ローカルでフル検証
 - `tools/semgrep/.semgrep.yml`：自社 Semgrep ルール（Autofix 例を含む）
