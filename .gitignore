@@ -1,0 +1,36 @@
+# Build outputs
+target/
+*.class
+*.jar
+*.war
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Security scan reports (generated)
+reports/
+!reports/.gitkeep
+
+# Temporary scan outputs (legacy - now in reports/)
+*.sarif
+dependency-check-report.json
+trivy-*.json
+gitleaks.sarif
+security-remediation.md
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Logs
+*.log
+

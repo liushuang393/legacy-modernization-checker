@@ -1,0 +1,154 @@
+stages:
+  - build
+  - test
+  - sast
+  - sca
+  - sbom
+  - dast
+  - container
+  - secret
+  - remediate
+
+variables:
+  MAVEN_CLI_OPTS: "-B -ntp"
+  MAVEN_IMAGE: "maven:3.9-eclipse-temurin-21"
+
+build:
+  stage: build
+  image: $MAVEN_IMAGE
+  script:
+    - mvn $MAVEN_CLI_OPTS -DskipTests package
+  artifacts:
+    when: always
+    paths:
+      - "**/target/*.jar"
+
+test:
+  stage: test
+  image: $MAVEN_IMAGE
+  script:
+    - mvn $MAVEN_CLI_OPTS test
+  artifacts:
+    when: always
+    reports:
+      junit: "**/target/surefire-reports/*.xml"
+
+sast_semgrep:
+  stage: sast
+  image: semgrep/semgrep:latest
+  script:
+    # 1) 既成ルール（p/java）で広く検出
+    - semgrep --config "p/java" --sarif --output semgrep.sarif
+    # 2) 自社ルール（必要なら --autofix は修正専用ブランチで）
+    - semgrep --config tools/semgrep/.semgrep.yml --sarif --output semgrep-custom.sarif || true
+  artifacts:
+    when: always
+    paths:
+      - semgrep.sarif
+      - semgrep-custom.sarif
+
+sca_dependency_check:
+  stage: sca
+  image: $MAVEN_IMAGE
+  script:
+    - mvn $MAVEN_CLI_OPTS org.owasp:dependency-check-maven:check -Dformat=ALL
+    # JSON を統一名にコピー（後段の対策案生成で参照）
+    - |
+      f=$(ls -1 **/target/dependency-check-report.json 2>/dev/null | head -n 1 || true)
+      if [ -n "$f" ]; then cp "$f" dependency-check-report.json; fi
+  artifacts:
+    when: always
+    paths:
+      - dependency-check-report.json
+      - "**/target/dependency-check-report.*"
+
+sbom_cyclonedx:
+  stage: sbom
+  image: $MAVEN_IMAGE
+  script:
+    - mvn $MAVEN_CLI_OPTS org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom -Dcyclonedx.outputFormat=json
+  artifacts:
+    when: always
+    paths:
+      - "**/target/bom.json"
+
+dast_zap:
+  stage: dast
+  image: $MAVEN_IMAGE
+  script:
+    # app-web を CI プロファイルで起動
+    - mvn $MAVEN_CLI_OPTS -pl app-web spring-boot:run -Dspring-boot.run.profiles=ci &
+    - echo "Waiting for app..."
+    - for i in $(seq 1 60); do curl -fsS http://localhost:8080/actuator/health && break || sleep 2; done
+    # ZAP（Docker）でスキャン
+    - docker run --network host --rm -v "$CI_PROJECT_DIR/tools/zap:/zap/wrk" zaproxy/zap-stable zap.sh -cmd -autorun /zap/wrk/automation.yaml
+  artifacts:
+    when: always
+    paths:
+      - tools/zap/zap-report.html
+      - tools/zap/zap-report.json
+
+container_scan_trivy:
+  stage: container
+  image: aquasec/trivy:latest
+  services:
+    - name: docker:dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+    TRIVY_NO_PROGRESS: "true"
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+    TRIVY_NO_PROGRESS: "true"
+  script:
+    # FSスキャン（Dockerfileが無いプロジェクトでも実行可能）
+    - trivy fs --format json --output trivy-fs.json --severity HIGH,CRITICAL --exit-code 0 .
+    # イメージスキャン（Dockerfileがある場合のみ）
+    - |
+      if [ -f Dockerfile ]; then
+        echo "Dockerfile found. Attempting image build & scan..."
+        # GitLab Runner が DinD 可能な場合に限り有効
+        docker build -t app-scan:ci .
+        trivy image --format json --output trivy-image.json --severity HIGH,CRITICAL --exit-code 0 app-scan:ci
+      elif [ -f docker/app-web.Dockerfile ]; then
+        echo "Using docker/app-web.Dockerfile (sample)."
+        docker build -f docker/app-web.Dockerfile -t app-web-scan:ci .
+        trivy image --format json --output trivy-image.json --severity HIGH,CRITICAL --exit-code 0 app-web-scan:ci
+      else
+        echo "No Dockerfile found; skipping image scan."
+      fi
+  artifacts:
+    when: always
+    paths:
+      - trivy-fs.json
+      - trivy-image.json
+
+
+secret_detection_gitleaks:
+  stage: secret
+  image: zricethezav/gitleaks:latest
+  script:
+    - gitleaks detect --redact --report-format sarif --report-path gitleaks.sarif --exit-code 0
+  artifacts:
+    when: always
+    paths:
+      - gitleaks.sarif
+
+
+remediation_plan:
+  stage: remediate
+  image: python:3.12-slim
+  dependencies:
+    - sast_semgrep
+    - sca_dependency_check
+    - dast_zap
+    - container_scan_trivy
+    - secret_detection_gitleaks
+  script:
+    - python tools/remediate/generate_remediation.py
+  artifacts:
+    when: always
+    paths:
+      - security-remediation.md

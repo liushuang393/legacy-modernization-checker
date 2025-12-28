@@ -1,0 +1,35 @@
+rules:
+  - id: java-string-equals
+    languages: [java]
+    severity: ERROR
+    message: "String 比較で '==' を使用しています。equals() を使用してください。（自動修正可）"
+    patterns:
+      - pattern: $A == $B
+      - metavariable-pattern:
+          metavariable: $A
+          pattern: ""...""
+    fix: "$A.equals($B)"
+    metadata:
+      owasp: "A10:2025 Mishandling of Exceptional Conditions"
+      autofix: true
+
+  - id: java-hardcoded-password
+    languages: [java]
+    severity: ERROR
+    message: "ハードコードされたパスワード/シークレットの疑い。環境変数/Secret Managerへ。（自動修正不可、対策案提示）"
+    pattern-either:
+      - pattern: "password = "...""
+      - pattern: "passwd = "...""
+      - pattern: "secret = "...""
+    metadata:
+      owasp: "A02:2025 Security Misconfiguration"
+      autofix: false
+
+  - id: java-sql-string-concat
+    languages: [java]
+    severity: ERROR
+    message: "SQL 文字列連結は Injection リスク。PreparedStatement/JPA バインドに置換してください。（自動修正不可）"
+    pattern: ""SELECT" + ... + $X"
+    metadata:
+      owasp: "A05:2025 Injection"
+      autofix: false
