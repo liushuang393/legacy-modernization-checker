@@ -35,3 +35,9 @@ venv/
 *.log
 
 scripts/.env
+security-reports
+checker/config/.env
+
+# Vulnerable sample files (test only - contains dummy secrets)
+app-web/src/main/resources/static/js/vulnerable.ts
+app-web/src/main/resources/vulnerable-config.yml

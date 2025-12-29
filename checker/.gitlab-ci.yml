@@ -1,0 +1,162 @@
+# =============================================================================
+# Security Checker - GitLab CI/CD Configuration
+# =============================================================================
+# 使用方法:
+#   1. このファイルを対象プロジェクトのルートにコピー
+#   2. checker/ フォルダも対象プロジェクトにコピー（または共有リポジトリから参照）
+#   3. 必要に応じて変数を調整
+# =============================================================================
+
+stages:
+  - build
+  - test
+  - sast
+  - sca
+  - sbom
+  - dast
+  - container
+  - secret
+  - remediate
+
+variables:
+  MAVEN_CLI_OPTS: "-B -ntp"
+  MAVEN_IMAGE: "maven:3.9-eclipse-temurin-21"
+  # checker ディレクトリは検査対象から除外
+  SCAN_EXCLUDE: "checker,node_modules,target,dist,.git"
+
+# =============================================================================
+# [1] Build
+# =============================================================================
+build:
+  stage: build
+  image: $MAVEN_IMAGE
+  script:
+    - mvn $MAVEN_CLI_OPTS -DskipTests package
+  artifacts:
+    when: always
+    paths:
+      - "**/target/*.jar"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+# =============================================================================
+# [2] Test
+# =============================================================================
+test:
+  stage: test
+  image: $MAVEN_IMAGE
+  script:
+    - mvn $MAVEN_CLI_OPTS test
+  artifacts:
+    when: always
+    reports:
+      junit: "**/target/surefire-reports/*.xml"
+
+# =============================================================================
+# [3] SAST - Semgrep
+# =============================================================================
+sast_semgrep:
+  stage: sast
+  image: semgrep/semgrep:latest
+  script:
+    # 既成ルール（checker ディレクトリ除外）
+    - semgrep --config "p/java" --config "p/security-audit" --sarif --output semgrep.sarif --exclude checker --exclude node_modules --exclude target
+    # カスタムルール
+    - |
+      if [ -f "checker/tools/semgrep/.semgrep.yml" ]; then
+        semgrep --config checker/tools/semgrep/.semgrep.yml --sarif --output semgrep-custom.sarif --exclude checker || true
+      fi
+  artifacts:
+    when: always
+    paths:
+      - semgrep.sarif
+      - semgrep-custom.sarif
+
+# =============================================================================
+# [4] SCA - Dependency Check (Zero Invasion)
+# =============================================================================
+sca_dependency_check:
+  stage: sca
+  image: $MAVEN_IMAGE
+  variables:
+    DC_VERSION: "12.1.0"
+  script:
+    - mvn $MAVEN_CLI_OPTS org.owasp:dependency-check-maven:${DC_VERSION}:check -Dformat=ALL -DossindexAnalyzerEnabled=false -DfailBuildOnCVSS=11
+    - |
+      f=$(find . -path "*/target/dependency-check-report.json" 2>/dev/null | head -n 1 || true)
+      [ -n "$f" ] && cp "$f" dependency-check-report.json
+  artifacts:
+    when: always
+    paths:
+      - dependency-check-report.json
+      - "**/target/dependency-check-report.*"
+
+# =============================================================================
+# [5] SBOM - CycloneDX (Zero Invasion)
+# =============================================================================
+sbom_cyclonedx:
+  stage: sbom
+  image: $MAVEN_IMAGE
+  variables:
+    CDX_VERSION: "2.9.1"
+  script:
+    - mvn $MAVEN_CLI_OPTS org.cyclonedx:cyclonedx-maven-plugin:${CDX_VERSION}:makeAggregateBom -Dcyclonedx.outputFormat=json
+  artifacts:
+    when: always
+    paths:
+      - "**/target/bom.json"
+
+# =============================================================================
+# [6] Container/FS Scan - Trivy
+# =============================================================================
+container_scan_trivy:
+  stage: container
+  image: aquasec/trivy:latest
+  script:
+    # FS スキャン（checker ディレクトリ除外）
+    - trivy fs --format json --output trivy-fs.json --severity HIGH,CRITICAL --skip-dirs checker --skip-dirs node_modules --skip-dirs target --exit-code 0 .
+  artifacts:
+    when: always
+    paths:
+      - trivy-fs.json
+
+# =============================================================================
+# [7] Secret Detection - Gitleaks
+# =============================================================================
+secret_detection_gitleaks:
+  stage: secret
+  image: zricethezav/gitleaks:latest
+  script:
+    - gitleaks detect --redact --report-format sarif --report-path gitleaks.sarif --exit-code 0
+  artifacts:
+    when: always
+    paths:
+      - gitleaks.sarif
+
+# =============================================================================
+# [8-9] Remediation Plan & HTML Report
+# =============================================================================
+remediation_plan:
+  stage: remediate
+  image: python:3.12-slim
+  dependencies:
+    - sast_semgrep
+    - sca_dependency_check
+    - container_scan_trivy
+    - secret_detection_gitleaks
+  variables:
+    SEMGREP_SARIF: "semgrep.sarif"
+    DEPCHECK_JSON: "dependency-check-report.json"
+    GITLEAKS_SARIF: "gitleaks.sarif"
+    TRIVY_FS_JSON: "trivy-fs.json"
+    REMEDIATION_MD: "security-remediation.md"
+  script:
+    - python checker/tools/remediate/generate_remediation.py
+    - python checker/tools/remediate/generate_html_report.py --input-dir . --output security-report.html --project-name "$CI_PROJECT_NAME"
+  artifacts:
+    when: always
+    paths:
+      - security-remediation.md
+      - security-report.html
+

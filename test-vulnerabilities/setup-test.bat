@@ -26,14 +26,18 @@ echo [2/3] Copying TypeScript vulnerability test files...
 copy "%SCRIPT_DIR%typescript\*.ts" "%TS_TEST_DIR%\" >nul
 echo   Done: %TS_TEST_DIR%
 
-echo [3/3] Verifying build...
+echo [3/3] Verifying build (optional)...
 cd /d "%ROOT%"
-call mvn -B -ntp compile -DskipTests
+where mvn >nul 2>&1
 if errorlevel 1 (
-    echo   [ERROR] Build failed
-    exit /b 1
+    echo   [SKIP] Maven not found - skipping build verification
 ) else (
-    echo   [OK] Build successful
+    call mvn -B -ntp compile -DskipTests -U >nul 2>&1
+    if errorlevel 1 (
+        echo   [WARN] Build failed - test files copied but may have compile errors
+    ) else (
+        echo   [OK] Build successful
+    )
 )
 
 echo.
@@ -41,8 +45,22 @@ echo ========================================
 echo Setup Complete!
 echo ========================================
 echo.
+echo Test files copied:
+echo   - A01_BrokenAccessControl.java
+echo   - A02_CryptographicFailures.java
+echo   - A03_Injection.java
+echo   - A04_InsecureDesign.java
+echo   - A05_SecurityMisconfiguration.java
+echo   - A06_VulnerableComponents.java
+echo   - A07_AuthenticationFailures.java
+echo   - A08_DataIntegrityFailures.java
+echo   - A09_LoggingFailures.java
+echo   - A10_SSRF.java
+echo   - AutofixExamples.java
+echo   - (and more...)
+echo.
 echo Run security check:
-echo   scripts\run_checks_local.bat
+echo   checker\run_check.bat .
 echo.
 echo Cleanup after test:
 echo   test-vulnerabilities\cleanup-test.bat

@@ -1,0 +1,48 @@
+# 脆弱性テスト用Dockerfile（本番使用禁止）
+# Trivy / Semgrep 検出対象
+
+# [VULN-046] 古いベースイメージ
+FROM ubuntu:18.04
+
+# [VULN-047] rootユーザーで実行
+USER root
+
+# [VULN-048] 認証情報をENVに設定
+ENV DB_PASSWORD=SuperSecret123!
+ENV AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+ENV AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+
+# [VULN-049] ADDの代わりにCOPYを使用すべき
+ADD https://example.com/some-package.tar.gz /tmp/
+
+# [VULN-050] apt-get updateとinstallを分離
+RUN apt-get update
+RUN apt-get install -y curl wget
+
+# [VULN-051] キャッシュを削除していない
+RUN apt-get install -y vim nano
+
+# [VULN-052] 最新タグの使用
+RUN curl -sL https://deb.nodesource.com/setup_14.x | bash -
+RUN apt-get install -y nodejs
+
+# [VULN-053] sudoのインストール（コンテナでは不要）
+RUN apt-get install -y sudo
+
+# [VULN-054] 不要なパッケージ
+RUN apt-get install -y telnet ftp
+
+# [VULN-055] COPYでワイルドカード使用
+COPY . /app
+
+# [VULN-056] WORKDIRの設定なし、絶対パス使用
+RUN cd /app && npm install
+
+# [VULN-057] HEALTHCHECKなし
+
+# [VULN-058] ポート0.0.0.0でバインド（暗黙的）
+EXPOSE 8080
+
+# [VULN-059] シェル形式のCMD
+CMD node /app/server.js
+

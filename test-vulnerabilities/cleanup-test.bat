@@ -35,6 +35,27 @@ echo.
 echo ========================================
 echo Cleanup Complete!
 echo ========================================
+echo.
+echo Removed test files:
+echo   - A01_BrokenAccessControl.java
+echo   - A02_CryptographicFailures.java
+echo   - A03_Injection.java
+echo   - A04_InsecureDesign.java
+echo   - A05_SecurityMisconfiguration.java
+echo   - A06_VulnerableComponents.java
+echo   - A07_AuthenticationFailures.java
+echo   - A08_DataIntegrityFailures.java
+echo   - A09_LoggingFailures.java
+echo   - A10_SSRF.java
+echo   - AutofixExamples.java
+echo   - SqlInjectionTest.java
+echo   - XssVulnTest.java
+echo   - CommandInjectionTest.java
+echo   - DeserializationTest.java
+echo   - HardcodedSecretTest.java
+echo   - PathTraversalTest.java
+echo   - (TypeScript files)
+echo ========================================
 
 exit /b 0
 

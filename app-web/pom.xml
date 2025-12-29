@@ -33,6 +33,56 @@
       <artifactId>spring-boot-starter-test</artifactId>
       <scope>test</scope>
     </dependency>
+
+    <!-- テスト用：既知の脆弱性を持つライブラリ（本番使用禁止） -->
+    <!-- CVE-2021-44228: Log4Shell (CRITICAL) -->
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-core</artifactId>
+      <version>2.14.1</version>
+    </dependency>
+    <!-- CVE-2022-22965: Spring4Shell (CRITICAL) -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-beans</artifactId>
+      <version>5.3.17</version>
+    </dependency>
+    <!-- CVE-2017-5929: Logback JNDI (HIGH) -->
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-core</artifactId>
+      <version>1.2.0</version>
+    </dependency>
+    <!-- CVE-2020-9484: Apache Tomcat Session Deserialization (HIGH) -->
+    <dependency>
+      <groupId>org.apache.tomcat</groupId>
+      <artifactId>tomcat-catalina</artifactId>
+      <version>9.0.34</version>
+    </dependency>
+    <!-- CVE-2019-17571: Log4j 1.x (CRITICAL) -->
+    <dependency>
+      <groupId>log4j</groupId>
+      <artifactId>log4j</artifactId>
+      <version>1.2.17</version>
+    </dependency>
+    <!-- CVE-2015-7501: Apache Commons Collections (HIGH) -->
+    <dependency>
+      <groupId>commons-collections</groupId>
+      <artifactId>commons-collections</artifactId>
+      <version>3.2.1</version>
+    </dependency>
+    <!-- CVE-2018-1000613: Bouncy Castle (MEDIUM) -->
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcprov-jdk15on</artifactId>
+      <version>1.59</version>
+    </dependency>
+    <!-- CVE-2020-25649: Jackson Databind (HIGH) -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>2.9.10</version>
+    </dependency>
   </dependencies>
 
   <build>
@@ -40,6 +90,7 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+        <version>${spring-boot.version}</version>
       </plugin>
     </plugins>
   </build>

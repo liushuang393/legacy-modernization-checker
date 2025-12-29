@@ -147,6 +147,26 @@ def parse_dependency_check(path: str) -> List[Finding]:
 
 def parse_zap_json(path: str) -> List[Finding]:
     """ZAP JSONレポートをパース"""
+    data = load_json(path)
+    if not data:
+        return []
+    findings = []
+    # ZAP JSON形式に対応
+    for site in data.get("site", []):
+        for alert in site.get("alerts", []):
+            risk = alert.get("riskdesc", "MEDIUM").split()[0].upper()
+            severity = {"HIGH": "HIGH", "MEDIUM": "MEDIUM", "LOW": "LOW", "INFORMATIONAL": "INFO"}.get(risk, "MEDIUM")
+            findings.append(Finding(
+                tool="zap",
+                rule_id=alert.get("alertRef", "ZAP-" + str(alert.get("pluginid", "unknown"))),
+                severity=severity,
+                title=alert.get("name", "Unknown Alert"),
+                description=alert.get("desc", ""),
+                file_path=alert.get("uri", ""),
+                line_number=0,
+                recommendation=alert.get("solution", "詳細はZAPレポートを参照")
+            ))
+    return findings
 
 
 def parse_trivy_json(path: str, tool_name: str) -> List[Finding]:
@@ -191,9 +211,11 @@ def collect_findings(input_dir: str) -> List[Finding]:
     findings = []
     base = Path(input_dir)
 
-    # SARIF形式
+    # SARIF形式 - Semgrep（複数言語に対応）
     for sarif_file, tool in [
-        ("semgrep.sarif", "semgrep"),
+        ("semgrep-java.sarif", "semgrep"),
+        ("semgrep-js.sarif", "semgrep"),
+        ("semgrep-python.sarif", "semgrep"),
         ("semgrep-custom.sarif", "semgrep-custom"),
         ("gitleaks.sarif", "gitleaks"),
     ]:
@@ -205,9 +227,8 @@ def collect_findings(input_dir: str) -> List[Finding]:
     # ZAP
     findings.extend(parse_zap_json(str(base / "zap-report.json")))
 
-    # Trivy
-    findings.extend(parse_trivy_json(str(base / "trivy-fs.json"), "trivy-fs"))
-    findings.extend(parse_trivy_json(str(base / "trivy-image.json"), "trivy-image"))
+    # Trivy（SARIF形式で出力される）
+    findings.extend(parse_sarif(str(base / "trivy.sarif"), "trivy"))
 
     return findings
 
@@ -459,18 +480,47 @@ new Chart(document.getElementById('owaspChart'), {{
     options: {{ responsive: true, maintainAspectRatio: false }}
 }});
 
+// 現在選択中のツールフィルター（空文字 = All）
+let currentToolFilter = '';
+
 // フィルタリング
 document.getElementById('severityFilter').addEventListener('change', filterTable);
 document.getElementById('searchFilter').addEventListener('input', filterTable);
 
+// ツールタブのクリックイベント
+document.querySelectorAll('.tool-filter-tab').forEach(tab => {{
+    tab.addEventListener('click', function(e) {{
+        e.preventDefault();
+        // 全タブからactiveを除去
+        document.querySelectorAll('.nav-tabs .nav-link').forEach(t => t.classList.remove('active'));
+        // クリックされたタブをactive
+        this.classList.add('active');
+        // ツールフィルターを設定
+        currentToolFilter = this.dataset.tool || '';
+        filterTable();
+    }});
+}});
+
+// Allタブのクリックイベント
+document.querySelector('.nav-tabs .nav-link[href="#all"]').addEventListener('click', function(e) {{
+    e.preventDefault();
+    document.querySelectorAll('.nav-tabs .nav-link').forEach(t => t.classList.remove('active'));
+    this.classList.add('active');
+    currentToolFilter = '';
+    filterTable();
+}});
+
 function filterTable() {{
     const sev = document.getElementById('severityFilter').value.toLowerCase();
     const search = document.getElementById('searchFilter').value.toLowerCase();
+    const toolFilter = currentToolFilter.toLowerCase();
     document.querySelectorAll('#findingsTable tbody tr').forEach(row => {{
         const text = row.textContent.toLowerCase();
+        const toolCell = row.querySelector('td:nth-child(2)')?.textContent.toLowerCase() || '';
         const sevMatch = !sev || text.includes(sev);
         const searchMatch = !search || text.includes(search);
-        row.style.display = sevMatch && searchMatch ? '' : 'none';
+        const toolMatch = !toolFilter || toolCell.includes(toolFilter);
+        row.style.display = sevMatch && searchMatch && toolMatch ? '' : 'none';
     }});
 }}
 </script>
@@ -557,10 +607,16 @@ def generate_diff_section(diff: Dict[str, List[Finding]]) -> str:
 
 
 def generate_tool_tabs(stats: Dict[str, Any]) -> str:
-    """ツール別タブを生成"""
+    """ツール別タブを生成（クリック可能なフィルタリングタブ）"""
     tabs = []
     for tool, count in stats.get("by_tool", {}).items():
-        tabs.append(f'<li class="nav-item"><a class="nav-link" href="#">{tool} ({count})</a></li>')
+        # data-tool属性を使用してJavaScriptでフィルタリング
+        safe_tool_id = tool.replace("-", "_").replace(".", "_")
+        tabs.append(
+            f'<li class="nav-item">'
+            f'<a class="nav-link tool-filter-tab" href="#" data-tool="{tool}" id="tab-{safe_tool_id}">'
+            f'{tool} ({count})</a></li>'
+        )
     return "\n".join(tabs)
 
 
@@ -629,8 +685,13 @@ def main() -> None:
 
     # HTMLレポートを生成
     output_path = args.output
-    if not os.path.isabs(output_path):
+    # 絶対パスでなく、かつ input_dir を含まない場合のみ結合
+    if not os.path.isabs(output_path) and not output_path.startswith(args.input_dir):
         output_path = os.path.join(args.input_dir, output_path)
+    # 出力ディレクトリが存在しない場合は作成
+    output_dir = os.path.dirname(output_path)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
     generate_html(findings, diff, stats, output_path, skipped, args.project_name)
 
     # キャッシュを保存

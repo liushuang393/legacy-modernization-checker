@@ -1,9 +1,11 @@
-package com.yourco.web.test;
+package com.yourco.web.vulnsamples;
 
-import org.springframework.stereotype.Component;
+import java.util.Base64;
+
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
-import java.util.Base64;
+
+import org.springframework.stereotype.Component;
 
 /**
  * ハードコードされた秘密情報テスト用クラス
